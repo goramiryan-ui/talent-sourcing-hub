@@ -1,0 +1,742 @@
+
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:transparent;color:var(--color-text-primary,#111);font-size:14px;line-height:1.5}
+button{font-family:inherit;cursor:pointer}
+select{font-family:inherit;font-size:13px;border:0.5px solid var(--color-border-tertiary,#ddd);border-radius:8px;padding:7px 10px;background:var(--color-background-primary,#fff);color:var(--color-text-primary,#111);outline:none;cursor:pointer}
+.team-btn{background:var(--color-background-primary,#fff);border:0.5px solid var(--color-border-tertiary,#e5e5e5);border-radius:14px;padding:18px;cursor:pointer;text-align:left;transition:border-color 0.15s;display:flex;flex-direction:column;gap:8px;width:100%}
+.team-btn:hover{border-color:var(--tc)}
+.card{background:var(--color-background-primary,#fff);border:0.5px solid var(--color-border-tertiary,#e5e5e5);border-radius:14px;padding:14px 16px;transition:border-color 0.15s}
+.card:hover{border-color:var(--tc,#378ADD)}
+.avatar{width:48px;height:48px;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:500;flex-shrink:0;overflow:hidden}
+.avatar img{width:100%;height:100%;object-fit:contain;padding:4px}
+.back-btn{background:transparent;border:0.5px solid var(--color-border-tertiary,#ddd);border-radius:8px;padding:6px 12px;font-size:13px;color:var(--color-text-secondary,#666);display:inline-flex;align-items:center;gap:5px}
+.back-btn:hover{background:var(--color-background-secondary,#f5f5f5)}
+.grid-teams{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:12px}
+.grid-cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(290px,1fr));gap:10px}
+.chart-box{background:var(--color-background-primary,#fff);border:0.5px solid var(--color-border-tertiary,#e5e5e5);border-radius:14px;padding:16px;margin-bottom:14px}
+.donut-wrap{position:relative;width:130px;height:130px;flex-shrink:0}
+.donut-center{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;pointer-events:none}
+.legend-row{display:flex;align-items:center;gap:8px;font-size:12px;padding:3px 5px;border-radius:5px;transition:background 0.1s}
+.legend-row.clickable{cursor:pointer}
+.legend-row.clickable:hover{background:var(--color-background-secondary,#f5f5f5)}
+.legend-dot{width:10px;height:10px;border-radius:2px;flex-shrink:0}
+.pill-toggle{border-radius:20px;padding:5px 14px;font-size:12px;font-weight:500;border:1.5px solid var(--color-border-secondary,#ccc);background:transparent;color:var(--color-text-secondary,#666);transition:all 0.15s;cursor:pointer}
+.pill-toggle.active{color:#fff;border-color:transparent}
+.bool-btn{border-radius:8px;padding:8px 16px;font-size:13px;font-weight:500;border:1.5px solid var(--color-border-secondary,#ccc);background:transparent;color:var(--color-text-primary,#111);cursor:pointer;transition:all 0.15s;display:flex;align-items:center;gap:6px}
+.bool-btn:hover{background:var(--color-background-secondary,#f5f5f5)}
+.modal-backdrop{background:rgba(0,0,0,0.4);border-radius:16px;padding:32px 20px;margin-bottom:16px;display:flex;align-items:center;justify-content:center}
+.modal-box{background:var(--color-background-primary,#fff);border-radius:14px;padding:24px;width:100%;max-width:680px}
+.copy-btn{border-radius:8px;padding:8px 16px;font-size:12px;font-weight:500;border:0.5px solid var(--color-border-secondary,#ccc);background:transparent;color:var(--color-text-primary,#111);cursor:pointer;transition:all 0.15s}
+.copy-btn:hover{background:var(--color-background-secondary,#f5f5f5)}
+.bool-text{font-family:monospace;font-size:12px;background:var(--color-background-secondary,#f5f5f5);border:0.5px solid var(--color-border-tertiary,#eee);border-radius:8px;padding:14px;word-break:break-word;line-height:1.7;color:var(--color-text-primary,#111);max-height:260px;overflow-y:auto;white-space:pre-wrap}
+#app{padding:16px 2px 32px}
+</style>
+<div id="app"></div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<script>
+const CHART_COLORS=["#378ADD","#1D9E75","#D85A30","#D4537E","#7F77DD","#BA7517","#639922","#E24B4A","#5F5E5A","#0F6E56"];
+
+const PALETTES=[
+  {bg:"#E8F0FD",fg:"#1A4FA8"},{bg:"#FDE8E8",fg:"#A81A1A"},{bg:"#E8FDF0",fg:"#1A7A40"},
+  {bg:"#FDF6E8",fg:"#8A5C00"},{bg:"#F0E8FD",fg:"#5A1AA8"},{bg:"#E8FDFD",fg:"#006B70"},
+  {bg:"#FDE8F6",fg:"#8A006B"},{bg:"#EDFDE8",fg:"#3A7A00"},{bg:"#FDE8ED",fg:"#A80030"},
+  {bg:"#E8F8FD",fg:"#005C8A"},{bg:"#FDF8E8",fg:"#7A5C00"},{bg:"#F8E8FD",fg:"#6B008A"},
+];
+function pal(n){return PALETTES[(n.charCodeAt(0)+n.charCodeAt(n.length-1))%PALETTES.length];}
+function ini(n){return n.replace(/[^a-zA-Z\s]/g,"").split(" ").filter(Boolean).slice(0,2).map(w=>w[0]).join("").toUpperCase()||"?";}
+
+function parseSize(s){
+  if(!s)return 0;
+  const n=parseInt(s.replace(/[^0-9]/g,"")||"0");
+  return n;
+}
+
+function getRegion(l){
+  if(!l)return"Unknown";
+  const v=l.toLowerCase();
+  if(v.match(/usa|united states|\bus\b|san francisco|new york|seattle|boston|chicago|austin|menlo park|los gatos|irvine|san jose|san mateo|redmond|cupertino|santa clara|mountain view|sunnyvale|denver|houston|fairfax|omaha|new jersey|plymouth|detroit|armonk/))return"Americas";
+  if(v.match(/brazil|brasil|são paulo|sao paulo|rio de janeiro|porto alegre|natal|curitiba|campo bom/))return"Americas";
+  if(v.match(/canada|toronto|montreal|ottawa/))return"Americas";
+  if(v.match(/argentina|buenos aires|uruguay|montevideo|mexico|mexico city|colombia|peru|chile/))return"Americas";
+  if(v.match(/germany|berlin|munich|hamburg|frankfurt|cologne|stuttgart|düsseldorf|dusseldorf|herzogenaurach|pullach|hannover|hanover|walldorf|würzburg|wurzburg|sarstedt|leipzig/))return"Europe";
+  if(v.match(/france|paris|lezennes|aix-en-provence/))return"Europe";
+  if(v.match(/\buk\b|united kingdom|london|manchester|birmingham/))return"Europe";
+  if(v.match(/netherlands|amsterdam|zaandam|utrecht|hoofddorp/))return"Europe";
+  if(v.match(/sweden|stockholm|switzerland|spain|madrid|barcelona|italy|milan|rome/))return"Europe";
+  if(v.match(/poland|warsaw|portugal|lisbon|belgium|brussels|antwerp|austria|vienna|schladming/))return"Europe";
+  if(v.match(/ireland|dublin|kilkenny|czech|prague|brno|estonia|tallinn|lithuania|vilnius/))return"Europe";
+  if(v.match(/romania|bucharest|turkey|istanbul|ukraine|kyiv|belarus|minsk|norway|finland|denmark|cyprus/))return"Europe";
+  if(v.match(/china|beijing|shanghai|shenzhen|hangzhou|hong kong/))return"Asia-Pacific";
+  if(v.match(/japan|tokyo|singapore|india|bengaluru|bangalore|gurgaon|mumbai|delhi/))return"Asia-Pacific";
+  if(v.match(/indonesia|jakarta|australia|melbourne|sydney|south korea|seoul/))return"Asia-Pacific";
+  if(v.match(/uae|dubai|sharjah|israel|tel aviv|saudi/))return"Middle East";
+  return"Other";
+}
+
+const LOGOS={
+  "Uber":"https://logo.clearbit.com/uber.com","Lyft":"https://logo.clearbit.com/lyft.com",
+  "BlaBlaCar":"https://logo.clearbit.com/blablacar.com","Bolt (Taxify)":"https://logo.clearbit.com/bolt.eu",
+  "DiDi":"https://logo.clearbit.com/didiglobal.com","FlixBus":"https://logo.clearbit.com/flixbus.com",
+  "Sixt":"https://logo.clearbit.com/sixt.com","Europcar":"https://logo.clearbit.com/europcar.com",
+  "Auto1 Group":"https://logo.clearbit.com/auto1-group.com","Cabify":"https://logo.clearbit.com/cabify.com",
+  "Gett":"https://logo.clearbit.com/gett.com","heycar":"https://logo.clearbit.com/hey.car",
+  "SHARE NOW":"https://logo.clearbit.com/share-now.com","Wunder Mobility":"https://logo.clearbit.com/wundermobility.com",
+  "Loggi":"https://logo.clearbit.com/loggi.com","MOIA":"https://logo.clearbit.com/moia.io",
+  "Movida":"https://logo.clearbit.com/movida.com.br","Getaround":"https://logo.clearbit.com/getaround.com",
+  "Amazon Web Services":"https://logo.clearbit.com/aws.amazon.com","Nutanix":"https://logo.clearbit.com/nutanix.com",
+  "Criteo":"https://logo.clearbit.com/criteo.com","Globant":"https://logo.clearbit.com/globant.com",
+  "HERE Technologies":"https://logo.clearbit.com/here.com","Luxoft":"https://logo.clearbit.com/luxoft.com",
+  "Taboola":"https://logo.clearbit.com/taboola.com","Yelp":"https://logo.clearbit.com/yelp.com",
+  "OpenTable":"https://logo.clearbit.com/opentable.com","SimilarWeb":"https://logo.clearbit.com/similarweb.com",
+  "Sisense":"https://logo.clearbit.com/sisense.com","Talend":"https://logo.clearbit.com/talend.com",
+  "MessageBird":"https://logo.clearbit.com/messagebird.com","diconium":"https://logo.clearbit.com/diconium.com",
+  "commercetools":"https://logo.clearbit.com/commercetools.com","SonarSource":"https://logo.clearbit.com/sonarsource.com",
+  "TheFork":"https://logo.clearbit.com/thefork.com","Grover":"https://logo.clearbit.com/getgrover.com",
+  "Appier":"https://logo.clearbit.com/appier.com","Walmart":"https://logo.clearbit.com/walmart.com",
+  "Target":"https://logo.clearbit.com/target.com","Tesco":"https://logo.clearbit.com/tesco.com",
+  "H&M":"https://logo.clearbit.com/hm.com","adidas":"https://logo.clearbit.com/adidas.com",
+  "Leroy Merlin":"https://logo.clearbit.com/leroymerlin.com","Sephora":"https://logo.clearbit.com/sephora.com",
+  "Nordstrom":"https://logo.clearbit.com/nordstrom.com","Macy's":"https://logo.clearbit.com/macys.com",
+  "Ahold Delhaize":"https://logo.clearbit.com/aholddelhaize.com","Fast Retailing":"https://logo.clearbit.com/fastretailing.com",
+  "Puma Group":"https://logo.clearbit.com/puma.com","lululemon":"https://logo.clearbit.com/lululemon.com",
+  "Ralph Lauren":"https://logo.clearbit.com/ralphlauren.com","Fnac":"https://logo.clearbit.com/fnac.com",
+  "Airbnb":"https://logo.clearbit.com/airbnb.com","Amazon":"https://logo.clearbit.com/amazon.com",
+  "eBay":"https://logo.clearbit.com/ebay.com","Etsy":"https://logo.clearbit.com/etsy.com",
+  "Zalando":"https://logo.clearbit.com/zalando.com","Wayfair":"https://logo.clearbit.com/wayfair.com",
+  "Deliveroo":"https://logo.clearbit.com/deliveroo.com","Groupon":"https://logo.clearbit.com/groupon.com",
+  "Trendyol":"https://logo.clearbit.com/trendyol.com","Allegro":"https://logo.clearbit.com/allegro.pl",
+  "About You":"https://logo.clearbit.com/aboutyou.com","Vrbo":"https://logo.clearbit.com/vrbo.com",
+  "Poshmark":"https://logo.clearbit.com/poshmark.com","StockX":"https://logo.clearbit.com/stockx.com",
+  "The RealReal":"https://logo.clearbit.com/therealreal.com","Otto Group":"https://logo.clearbit.com/otto.com",
+  "PayPal":"https://logo.clearbit.com/paypal.com","Stripe":"https://logo.clearbit.com/stripe.com",
+  "Klarna":"https://logo.clearbit.com/klarna.com","Revolut":"https://logo.clearbit.com/revolut.com",
+  "Wise":"https://logo.clearbit.com/wise.com","American Express":"https://logo.clearbit.com/americanexpress.com",
+  "Coinbase":"https://logo.clearbit.com/coinbase.com","Nubank":"https://logo.clearbit.com/nubank.com.br",
+  "Adyen":"https://logo.clearbit.com/adyen.com","Robinhood":"https://logo.clearbit.com/robinhood.com",
+  "Monzo":"https://logo.clearbit.com/monzo.com","Affirm":"https://logo.clearbit.com/affirm.com",
+  "SoFi":"https://logo.clearbit.com/sofi.com","Square (Block)":"https://logo.clearbit.com/block.xyz",
+  "Plaid":"https://logo.clearbit.com/plaid.com","Chime":"https://logo.clearbit.com/chime.com",
+  "Mambu":"https://logo.clearbit.com/mambu.com","GoCardless":"https://logo.clearbit.com/gocardless.com",
+  "N26":"https://logo.clearbit.com/n26.com","Brex":"https://logo.clearbit.com/brex.com",
+  "Shopify":"https://logo.clearbit.com/shopify.com","JD.com":"https://logo.clearbit.com/jd.com",
+  "Mercado Libre":"https://logo.clearbit.com/mercadolibre.com","Flipkart":"https://logo.clearbit.com/flipkart.com",
+  "Farfetch":"https://logo.clearbit.com/farfetch.com","Coupang":"https://logo.clearbit.com/coupang.com",
+  "Rakuten":"https://logo.clearbit.com/rakuten.com","Veepee":"https://logo.clearbit.com/veepee.com",
+  "NET-A-PORTER":"https://logo.clearbit.com/net-a-porter.com","bol.com":"https://logo.clearbit.com/bol.com",
+  "Bukalapak":"https://logo.clearbit.com/bukalapak.com","Vinted":"https://logo.clearbit.com/vinted.com",
+  "Hepsiburada":"https://logo.clearbit.com/hepsiburada.com","Mercari":"https://logo.clearbit.com/mercari.com",
+  "THE ICONIC":"https://logo.clearbit.com/theiconic.com.au","Booking.com":"https://logo.clearbit.com/booking.com",
+  "Expedia Group":"https://logo.clearbit.com/expedia.com","TripAdvisor":"https://logo.clearbit.com/tripadvisor.com",
+  "Agoda":"https://logo.clearbit.com/agoda.com","trivago":"https://logo.clearbit.com/trivago.com",
+  "TUI Group":"https://logo.clearbit.com/tui.com","Lufthansa":"https://logo.clearbit.com/lufthansa.com",
+  "Emirates":"https://logo.clearbit.com/emirates.com","Ryanair":"https://logo.clearbit.com/ryanair.com",
+  "Klook":"https://logo.clearbit.com/klook.com","Hopper":"https://logo.clearbit.com/hopper.com",
+  "Traveloka":"https://logo.clearbit.com/traveloka.com","Despegar":"https://logo.clearbit.com/despegar.com",
+  "Trip.com":"https://logo.clearbit.com/trip.com","Kiwi.com":"https://logo.clearbit.com/kiwi.com",
+  "Make My Trip":"https://logo.clearbit.com/makemytrip.com","Priceline":"https://logo.clearbit.com/priceline.com",
+  "Sabre Corporation":"https://logo.clearbit.com/sabre.com","BCD Travel":"https://logo.clearbit.com/bcdtravel.com",
+  "G Adventures":"https://logo.clearbit.com/gadventures.com","Intrepid Travel":"https://logo.clearbit.com/intrepidtravel.com",
+  "citizenM Hotels":"https://logo.clearbit.com/citizenm.com","Omio":"https://logo.clearbit.com/omio.com",
+  "Apple":"https://logo.clearbit.com/apple.com","Google":"https://logo.clearbit.com/google.com",
+  "Microsoft":"https://logo.clearbit.com/microsoft.com","Meta":"https://logo.clearbit.com/meta.com",
+  "Netflix":"https://logo.clearbit.com/netflix.com","Spotify":"https://logo.clearbit.com/spotify.com",
+  "Salesforce":"https://logo.clearbit.com/salesforce.com","Adobe":"https://logo.clearbit.com/adobe.com",
+  "NVIDIA":"https://logo.clearbit.com/nvidia.com","Samsung":"https://logo.clearbit.com/samsung.com",
+  "Intel":"https://logo.clearbit.com/intel.com","IBM":"https://logo.clearbit.com/ibm.com",
+  "Oracle":"https://logo.clearbit.com/oracle.com","SAP":"https://logo.clearbit.com/sap.com",
+  "Sony":"https://logo.clearbit.com/sony.com","Tesla":"https://logo.clearbit.com/tesla.com",
+  "Tencent":"https://logo.clearbit.com/tencent.com","Alibaba":"https://logo.clearbit.com/alibaba.com",
+  "ByteDance":"https://logo.clearbit.com/bytedance.com","Baidu":"https://logo.clearbit.com/baidu.com",
+  "LinkedIn":"https://logo.clearbit.com/linkedin.com","Twitter (X)":"https://logo.clearbit.com/x.com",
+  "Rakuten Europe":"https://logo.clearbit.com/rakuten.com","Cdiscount":"https://logo.clearbit.com/cdiscount.com",
+  "InPost":"https://logo.clearbit.com/inpost.pl","Digitec Galaxus":"https://logo.clearbit.com/digitecgalaxus.ch",
+  "Stone Pagamentos":"https://logo.clearbit.com/stone.com.br","Creditas":"https://logo.clearbit.com/creditas.com",
+  "Holidu":"https://logo.clearbit.com/holidu.com","Kiwi.com":"https://logo.clearbit.com/kiwi.com",
+  "Dufry Group":"https://logo.clearbit.com/dufry.com","Thomas Cook":"https://logo.clearbit.com/thomascook.com",
+  "Hotels.com":"https://logo.clearbit.com/hotels.com","Travelzoo":"https://logo.clearbit.com/travelzoo.com",
+};
+
+const TEAMS={
+  "Marketing & Branding":{icon:"📣",color:"#D85A30",bg:"#FDF0EB",companies:[
+    {c:"Uber",l:"San Francisco, USA",i:"Mobility",s:"30,000+"},
+    {c:"DiDi",l:"Beijing, China",i:"Mobility",s:"25,000+"},
+    {c:"Lyft",l:"US",i:"Mobility",s:"20,000+"},
+    {c:"Sixt",l:"Pullach, Germany",i:"Mobility",s:"8,000+"},
+    {c:"Europcar",l:"Paris, France",i:"Mobility",s:"7,000+"},
+    {c:"Auto1 Group",l:"Berlin, Germany",i:"Mobility",s:"5,000+"},
+    {c:"Movida",l:"São Paulo, Brazil",i:"Mobility",s:"4,000+"},
+    {c:"FlixBus",l:"Munich, Germany",i:"Mobility",s:"3,000+"},
+    {c:"Bolt (Taxify)",l:"Tallinn, Estonia",i:"Mobility",s:"3,000+"},
+    {c:"Loggi",l:"São Paulo, Brazil",i:"Mobility",s:"3,000+"},
+    {c:"SHARE NOW",l:"Stuttgart, Germany",i:"Mobility",s:"1,000+"},
+    {c:"DriveNow",l:"Munich, Germany",i:"Mobility",s:"1,000+"},
+    {c:"Frontier Car Group",l:"Berlin, Germany",i:"Mobility",s:"1,000+"},
+    {c:"Cabify",l:"Madrid, Spain",i:"Mobility",s:"1,000+"},
+    {c:"Gett",l:"London, UK",i:"Mobility",s:"1,000+"},
+    {c:"Easy Taxi",l:"São Paulo, Brazil",i:"Mobility",s:"1,000+"},
+    {c:"BlaBlaCar",l:"Paris, France",i:"Mobility",s:"700+"},
+    {c:"ReachNow",l:"US",i:"Mobility",s:"500+"},
+    {c:"heycar",l:"Berlin, Germany",i:"Mobility",s:"500+"},
+    {c:"MOIA",l:"Hamburg, Germany",i:"Mobility",s:"500+"},
+    {c:"Ubeeqo",l:"Paris, France",i:"Mobility",s:"100–200"},
+    {c:"Riaktr",l:"Brussels, Belgium",i:"Mobility SaaS",s:"100–200"},
+    {c:"Delivery Center",l:"São Paulo, Brazil",i:"Mobility",s:"100–200"},
+    {c:"Getaround",l:"Paris, France",i:"Mobility",s:"150+"},
+    {c:"Carmudi",l:"Berlin, Germany",i:"Mobility",s:"200+"},
+    {c:"Wunder Mobility",l:"Hamburg, Germany",i:"Mobility",s:"200+"},
+    {c:"Moovel",l:"Stuttgart, Germany",i:"Mobility",s:"200–500"},
+    {c:"Onde",l:"Minsk, Belarus",i:"Mobility SaaS",s:"50-100"},
+  ]},
+  "Tech":{icon:"💻",color:"#185FA5",bg:"#EBF3FC",companies:[
+    {c:"Amazon Web Services",l:"US",i:"Cloud",s:"50,000+"},
+    {c:"Globant",l:"Argentina",i:"Software",s:"22,000+"},
+    {c:"HERE Technologies",l:"Amsterdam, Netherlands",i:"Mapping Software",s:"10,000+"},
+    {c:"Luxoft",l:"Switzerland",i:"Software",s:"10,000+"},
+    {c:"Yelp",l:"US",i:"Software",s:"5,000+"},
+    {c:"Criteo",l:"Paris, France",i:"Ad Tech",s:"5,000+"},
+    {c:"Nutanix",l:"US",i:"Software",s:"7,000+"},
+    {c:"Talend",l:"US",i:"Software",s:"2,000+"},
+    {c:"diconium",l:"Stuttgart, Germany",i:"Software",s:"2,000+"},
+    {c:"Valve Corporation",l:"US",i:"Software",s:"2,000+"},
+    {c:"Ciklum",l:"Ukraine",i:"Software",s:"2,000+"},
+    {c:"Sisense",l:"US",i:"Software",s:"1,000+"},
+    {c:"OpenTable",l:"US",i:"Software",s:"1,000+"},
+    {c:"Taboola",l:"US",i:"Ad Tech",s:"1,000+"},
+    {c:"MessageBird",l:"Amsterdam, Netherlands",i:"Communication",s:"1,000+"},
+    {c:"Datorama",l:"US",i:"Marketing Tech",s:"1,000+"},
+    {c:"MediaMath",l:"US",i:"Ad Tech",s:"1,000+"},
+    {c:"QSC AG",l:"Cologne, Germany",i:"Software",s:"1,000+"},
+    {c:"thumbtack",l:"US",i:"Software",s:"1,000+"},
+    {c:"Grover",l:"Berlin, Germany",i:"Software",s:"500-1000"},
+    {c:"SimilarWeb",l:"Israel",i:"Software",s:"500+"},
+    {c:"commercetools",l:"Munich, Germany",i:"Software",s:"500+"},
+    {c:"SonarSource",l:"Switzerland",i:"Software",s:"500+"},
+    {c:"TheFork",l:"Paris, France",i:"Software",s:"500+"},
+    {c:"Appier",l:"Singapore",i:"Software",s:"500+"},
+    {c:"Amobee",l:"US",i:"Ad Tech",s:"500+"},
+    {c:"Cloudsense",l:"London, UK",i:"Software",s:"500+"},
+    {c:"iponweb",l:"London, UK",i:"Ad Tech",s:"500+"},
+    {c:"OpenX",l:"US",i:"Ad Tech",s:"500+"},
+    {c:"Rubicon Project",l:"US",i:"Ad Tech",s:"500+"},
+    {c:"Searchmetrics",l:"US",i:"SEO Software",s:"500+"},
+    {c:"Moz",l:"US",i:"SEO Software",s:"500+"},
+    {c:"Sigfox",l:"Paris, France",i:"IoT",s:"500+"},
+    {c:"Scality",l:"US",i:"Software",s:"500+"},
+    {c:"Tapad",l:"US",i:"Ad Tech",s:"500+"},
+  ]},
+  "PM":{icon:"📋",color:"#3B6D11",bg:"#EDF5E4",companies:[
+    {c:"Walmart",l:"US",i:"Retail",s:"2,200,000+"},
+    {c:"Ahold Delhaize",l:"Zaandam, Netherlands",i:"Retail",s:"370,000+"},
+    {c:"Target",l:"US",i:"Retail",s:"350,000+"},
+    {c:"Tesco",l:"London, UK",i:"Retail",s:"300,000+"},
+    {c:"H&M",l:"Stockholm, Sweden",i:"Retail",s:"130,000+"},
+    {c:"Macy's",l:"US",i:"Retail",s:"100,000+"},
+    {c:"Albert Heijn",l:"Amsterdam, Netherlands",i:"Retail",s:"100,000+"},
+    {c:"Leroy Merlin",l:"Lezennes, France",i:"Retail",s:"88,000+"},
+    {c:"adidas",l:"Herzogenaurach, Germany",i:"Retail",s:"60,000+"},
+    {c:"Fast Retailing",l:"Tokyo, Japan",i:"Retail",s:"60,000+"},
+    {c:"Staples",l:"US",i:"Retail",s:"60,000+"},
+    {c:"Nordstrom",l:"US",i:"Retail",s:"70,000+"},
+    {c:"Sephora",l:"Paris, France",i:"Retail",s:"39,000+"},
+    {c:"Lojas Riachuelo",l:"Natal, Brazil",i:"Retail",s:"40,000+"},
+    {c:"Puma Group",l:"Herzogenaurach, Germany",i:"Retail",s:"18,000+"},
+    {c:"Marisa",l:"São Paulo, Brazil",i:"Retail",s:"14,000+"},
+    {c:"Fnac",l:"Paris, France",i:"Retail",s:"25,000+"},
+    {c:"Lojas Renner",l:"Porto Alegre, Brazil",i:"Retail",s:"24,000+"},
+    {c:"lululemon",l:"US",i:"Retail",s:"20,000+"},
+    {c:"Ralph Lauren",l:"US",i:"Retail",s:"20,000+"},
+    {c:"ASICS",l:"Hoofddorp, Netherlands",i:"Retail",s:"8,000+"},
+    {c:"David Jones",l:"Sydney, Australia",i:"Retail",s:"7,000+"},
+    {c:"L'Occitane",l:"Paris, France",i:"Retail",s:"10,000+"},
+    {c:"Reebok",l:"US",i:"Retail",s:"10,000+"},
+    {c:"Arezzo&Co",l:"Campo Bom, Brazil",i:"Retail",s:"5,000+"},
+    {c:"InBrands",l:"São Paulo, Brazil",i:"Retail",s:"4,000+"},
+    {c:"Tok&Stok",l:"São Paulo, Brazil",i:"Retail",s:"3,500+"},
+    {c:"Saraiva",l:"São Paulo, Brazil",i:"Retail",s:"3,000+"},
+    {c:"H.Stern",l:"Rio de Janeiro, Brazil",i:"Retail",s:"3,000+"},
+    {c:"internetstores",l:"Stuttgart, Germany",i:"Retail",s:"1,000+"},
+    {c:"SportsCheck",l:"Munich, Germany",i:"Retail",s:"1,000+"},
+    {c:"Reserva",l:"Rio de Janeiro, Brazil",i:"Retail",s:"1,000+"},
+    {c:"Warby Parker",l:"US",i:"Retail",s:"2,000+"},
+    {c:"Osklen",l:"Rio de Janeiro, Brazil",i:"Retail",s:"500–1,000"},
+    {c:"Theory",l:"US",i:"Retail",s:"500+"},
+    {c:"Oasis",l:"London, UK",i:"Retail",s:"500+"},
+    {c:"Horizn Studios",l:"Berlin, Germany",i:"Retail",s:"100+"},
+  ]},
+  "Product Design":{icon:"🎨",color:"#993556",bg:"#F8EBF0",companies:[
+    {c:"Amazon",l:"Seattle, USA",i:"General Marketplace",s:"1,500,000+"},
+    {c:"Walmart Marketplace",l:"US",i:"General Marketplace",s:"1,500,000+"},
+    {c:"Airbnb",l:"San Francisco, USA",i:"Vacation Rentals",s:"10,000+"},
+    {c:"eBay",l:"San Jose, USA",i:"General Marketplace",s:"10,000+"},
+    {c:"Etsy",l:"New York, USA",i:"Handmade & Vintage",s:"10,000+"},
+    {c:"Otto Group",l:"Hamburg, Germany",i:"E-commerce",s:"50,000+"},
+    {c:"InPost",l:"Warsaw, Poland",i:"Logistics",s:"10,000+"},
+    {c:"Zalando",l:"Berlin, Germany",i:"Fashion & Lifestyle",s:"17,000+"},
+    {c:"Wayfair",l:"Boston, USA",i:"Home Goods",s:"20,000+"},
+    {c:"Deliveroo",l:"London, UK",i:"Food Delivery",s:"10,000+"},
+    {c:"Allegro",l:"Warsaw, Poland",i:"Marketplace",s:"5,000+"},
+    {c:"Groupon",l:"Chicago, USA",i:"Online Marketplace",s:"3,000+"},
+    {c:"Trendyol",l:"Istanbul, Turkey",i:"Marketplace",s:"5,000+"},
+    {c:"Rakuten Europe",l:"Paris, France",i:"Marketplace",s:"10,000+"},
+    {c:"Emag",l:"Bucharest, Romania",i:"Marketplace",s:"3,000+"},
+    {c:"Digitec Galaxus",l:"Zurich, Switzerland",i:"General Retail",s:"3,000+"},
+    {c:"The RealReal",l:"San Francisco, USA",i:"Luxury Resale",s:"2,000+"},
+    {c:"Vrbo",l:"Austin, USA",i:"Vacation Rentals",s:"3,000+"},
+    {c:"Cdiscount",l:"Paris, France",i:"General Retail",s:"2,000+"},
+    {c:"StockX",l:"Detroit, USA",i:"Sneakers & Streetwear",s:"1,000+"},
+    {c:"About You",l:"Hamburg, Germany",i:"Fashion",s:"1,200+"},
+    {c:"rentalcars.com",l:"Manchester, UK",i:"Car Rental",s:"1,000+"},
+    {c:"Newegg",l:"US",i:"Electronics",s:"1,000+"},
+    {c:"HomeToGo",l:"Berlin, Germany",i:"Vacation Rentals",s:"500+"},
+    {c:"Poshmark",l:"San Francisco, USA",i:"Fashion Resale",s:"800+"},
+    {c:"OnBuy",l:"London, UK",i:"Marketplace",s:"200+"},
+    {c:"Notonthehighstreet",l:"London, UK",i:"Gifts & Lifestyle",s:"300+"},
+    {c:"Joom",l:"Lisbon, Portugal",i:"Marketplace",s:"500+"},
+    {c:"Grailed",l:"New York, USA",i:"Men's Fashion",s:"200+"},
+    {c:"heycar",l:"Berlin, Germany",i:"Used Car Marketplace",s:"500-1000"},
+    {c:"Watchmaster",l:"Berlin, Germany",i:"Luxury Watch Marketplace",s:"50-100"},
+    {c:"Aklamio",l:"Berlin, Germany",i:"Referral Marketing SaaS",s:"50-100"},
+    {c:"EyeEm",l:"Berlin, Germany",i:"Photography Marketplace",s:"50-100"},
+    {c:"Drawbotics",l:"Brussels, Belgium",i:"Real Estate SaaS",s:"10-50"},
+    {c:"HomeAway",l:"Austin, USA",i:"Vacation Rentals",s:"5,000+"},
+  ]},
+  "People":{icon:"👥",color:"#534AB7",bg:"#EEEDF9",companies:[
+    {c:"American Express",l:"New York, USA",i:"Fintech",s:"60,000+"},
+    {c:"PayPal",l:"US",i:"Fintech",s:"30,000+"},
+    {c:"Stone Pagamentos",l:"São Paulo, Brazil",i:"Fintech",s:"14,000+"},
+    {c:"Klarna",l:"Stockholm, Sweden",i:"Fintech",s:"10,000+"},
+    {c:"Stripe",l:"San Francisco, USA",i:"Fintech",s:"10,000+"},
+    {c:"Square (Block)",l:"San Francisco, USA",i:"Fintech",s:"10,000+"},
+    {c:"Nubank",l:"São Paulo, Brazil",i:"Fintech",s:"9,000+"},
+    {c:"Revolut",l:"London, UK",i:"Fintech",s:"8,000+"},
+    {c:"SoFi",l:"San Francisco, USA",i:"Fintech",s:"5,000+"},
+    {c:"Wise",l:"London, UK",i:"Fintech",s:"5,000+"},
+    {c:"Creditas",l:"São Paulo, Brazil",i:"Fintech",s:"4,000+"},
+    {c:"Adyen",l:"Amsterdam, Netherlands",i:"Fintech",s:"3,000+"},
+    {c:"Robinhood",l:"Menlo Park, USA",i:"Fintech",s:"3,000+"},
+    {c:"Monzo",l:"London, UK",i:"Fintech",s:"3,000+"},
+    {c:"Affirm",l:"San Francisco, USA",i:"Fintech",s:"2,500+"},
+    {c:"Avaloq",l:"Switzerland",i:"Fintech",s:"2,000+"},
+    {c:"Credit Karma",l:"San Francisco, USA",i:"Fintech",s:"2,000+"},
+    {c:"LendingClub",l:"San Francisco, USA",i:"Fintech",s:"1,500+"},
+    {c:"Bill.com",l:"San Jose, USA",i:"Fintech",s:"1,500+"},
+    {c:"Chime",l:"San Francisco, USA",i:"Fintech",s:"1,500+"},
+    {c:"N26",l:"Berlin, Germany",i:"Fintech",s:"1,500+"},
+    {c:"Plaid",l:"San Francisco, USA",i:"Fintech",s:"1,000+"},
+    {c:"Brex",l:"San Francisco, USA",i:"Fintech",s:"1,000+"},
+    {c:"Mambu",l:"Berlin, Germany",i:"Fintech",s:"1,000+"},
+    {c:"Varo Money",l:"San Francisco, USA",i:"Fintech",s:"1,000+"},
+    {c:"Braintree",l:"Chicago, USA",i:"Fintech",s:"1,000+"},
+    {c:"Upstart",l:"San Mateo, USA",i:"Fintech",s:"1,000+"},
+    {c:"Finix",l:"San Francisco, USA",i:"Fintech",s:"500+"},
+    {c:"smava",l:"Berlin, Germany",i:"Fintech",s:"600+"},
+    {c:"solarisBank",l:"Berlin, Germany",i:"Fintech",s:"600+"},
+    {c:"Ebanx",l:"São Paulo, Brazil",i:"Fintech",s:"500+"},
+    {c:"Raisin",l:"Berlin, Germany",i:"Fintech",s:"500+"},
+    {c:"TrueLayer",l:"London, UK",i:"Fintech",s:"500+"},
+    {c:"Zopa",l:"London, UK",i:"Fintech",s:"700+"},
+    {c:"GoCardless",l:"London, UK",i:"Fintech",s:"700+"},
+    {c:"TransferMate",l:"Kilkenny, Ireland",i:"Fintech",s:"400+"},
+    {c:"Betterment",l:"New York, USA",i:"Fintech",s:"500+"},
+    {c:"Acorns",l:"Irvine, USA",i:"Fintech",s:"400+"},
+    {c:"YAPily",l:"London, UK",i:"Fintech",s:"300+"},
+    {c:"Billie",l:"Berlin, Germany",i:"Fintech",s:"200-500"},
+    {c:"Deposit Solutions",l:"Hamburg, Germany",i:"Fintech",s:"200-500"},
+    {c:"Kreditech",l:"Hamburg, Germany",i:"Fintech",s:"200+"},
+    {c:"Twint",l:"Switzerland",i:"Fintech",s:"200+"},
+    {c:"Guiabolso",l:"São Paulo, Brazil",i:"Fintech",s:"100–200"},
+    {c:"Crosslend",l:"Berlin, Germany",i:"Fintech",s:"50-100"},
+    {c:"Cashforce",l:"Antwerp, Belgium",i:"Fintech",s:"50-100"},
+    {c:"Zeitgold",l:"Berlin, Germany",i:"Fintech",s:"50-100"},
+  ]},
+  "Sales":{icon:"📈",color:"#BA7517",bg:"#FBF3E5",companies:[
+    {c:"JD.com",l:"Beijing, China",i:"E-commerce",s:"500,000+"},
+    {c:"Mercado Libre",l:"Montevideo, Uruguay",i:"E-commerce",s:"84,000+"},
+    {c:"Flipkart",l:"Bengaluru, India",i:"E-commerce",s:"50,000+"},
+    {c:"Coupang",l:"Seoul, South Korea",i:"E-commerce",s:"50,000+"},
+    {c:"B2W Digital",l:"Rio de Janeiro, Brazil",i:"E-commerce",s:"8,000+"},
+    {c:"Livspace",l:"Bengaluru, India",i:"E-commerce",s:"5,000+"},
+    {c:"Hepsiburada",l:"Istanbul, Turkey",i:"E-commerce",s:"5,000+"},
+    {c:"Rakuten",l:"Tokyo, Japan",i:"E-commerce",s:"10,000+"},
+    {c:"Shopify",l:"Ottawa, Canada",i:"E-commerce Platform",s:"10,000+"},
+    {c:"Zalando",l:"Berlin, Germany",i:"E-commerce",s:"17,000+"},
+    {c:"Wayfair",l:"Boston, USA",i:"E-commerce",s:"20,000+"},
+    {c:"Veepee",l:"Paris, France",i:"E-commerce",s:"6,000+"},
+    {c:"Dafiti Group",l:"São Paulo, Brazil",i:"E-commerce",s:"3,000+"},
+    {c:"Groupon",l:"Chicago, USA",i:"E-commerce",s:"3,000+"},
+    {c:"bol.com",l:"Utrecht, Netherlands",i:"E-commerce",s:"2,500+"},
+    {c:"Bukalapak",l:"Jakarta, Indonesia",i:"E-commerce",s:"2,000+"},
+    {c:"Vinted",l:"Vilnius, Lithuania",i:"E-commerce",s:"2,000+"},
+    {c:"blibli.com",l:"Jakarta, Indonesia",i:"E-commerce",s:"2,000+"},
+    {c:"home24",l:"Berlin, Germany",i:"E-commerce",s:"1,500+"},
+    {c:"Westwing",l:"Munich, Germany",i:"E-commerce",s:"1,500+"},
+    {c:"Mercari",l:"Tokyo, Japan",i:"E-commerce",s:"1,500+"},
+    {c:"Leboncoin",l:"Paris, France",i:"E-commerce",s:"1,200+"},
+    {c:"showroomprive",l:"Paris, France",i:"E-commerce",s:"1,200+"},
+    {c:"About You",l:"Hamburg, Germany",i:"E-commerce",s:"1,200+"},
+    {c:"Flyeralarm",l:"Würzburg, Germany",i:"E-commerce",s:"2,000+"},
+    {c:"Farfetch",l:"London, UK",i:"Luxury E-commerce",s:"2,000+"},
+    {c:"NET-A-PORTER",l:"London, UK",i:"Luxury E-commerce",s:"2,000+"},
+    {c:"THE ICONIC",l:"Sydney, Australia",i:"E-commerce",s:"1,000+"},
+    {c:"Snapdeal",l:"Gurgaon, India",i:"E-commerce",s:"1,000+"},
+    {c:"idealo",l:"Berlin, Germany",i:"E-commerce",s:"1,000+"},
+    {c:"kfzteile24",l:"Berlin, Germany",i:"E-commerce",s:"1,000+"},
+    {c:"Mister Spex",l:"Berlin, Germany",i:"E-commerce",s:"1,000+"},
+    {c:"Mobly",l:"São Paulo, Brazil",i:"E-commerce",s:"1,000+"},
+    {c:"Linio Group",l:"Mexico City, Mexico",i:"E-commerce",s:"1,000+"},
+    {c:"Stubhub",l:"US",i:"E-commerce",s:"1,000+"},
+    {c:"zulily",l:"US",i:"E-commerce",s:"1,000+"},
+    {c:"Newegg",l:"US",i:"E-commerce",s:"1,000+"},
+    {c:"Overstock",l:"US",i:"E-commerce",s:"2,000+"},
+    {c:"Noon",l:"Dubai, UAE",i:"E-commerce",s:"2,000+"},
+    {c:"Check24",l:"Munich, Germany",i:"E-commerce",s:"1,500+"},
+    {c:"mytheresa",l:"Munich, Germany",i:"Luxury E-commerce",s:"800+"},
+    {c:"Spreadshirt",l:"Leipzig, Germany",i:"E-commerce",s:"800+"},
+    {c:"Flaconi",l:"Berlin, Germany",i:"E-commerce",s:"500–1,000"},
+    {c:"Namshi",l:"Dubai, UAE",i:"E-commerce",s:"500–1,000"},
+    {c:"Blue Tomato",l:"Schladming, Austria",i:"E-commerce",s:"500–1,000"},
+    {c:"Privalia",l:"Barcelona, Spain",i:"E-commerce",s:"1,000+"},
+    {c:"zooplus",l:"Munich, Germany",i:"E-commerce",s:"900+"},
+    {c:"Zappos",l:"US",i:"E-commerce",s:"1,500+"},
+  ]},
+  "Travel Tech":{icon:"✈️",color:"#0F6E56",bg:"#E5F5F0",companies:[
+    {c:"Lufthansa",l:"Cologne, Germany",i:"Aviation",s:"100,000+"},
+    {c:"Emirates",l:"Dubai, UAE",i:"Aviation",s:"109,000+"},
+    {c:"TUI Group",l:"Hannover, Germany",i:"Tour Operator",s:"60,000+"},
+    {c:"Expedia Group",l:"US",i:"Travel OTA",s:"25,000+"},
+    {c:"Ryanair",l:"Dublin, Ireland",i:"Low-cost Aviation",s:"20,000+"},
+    {c:"Dufry Group",l:"Switzerland",i:"Travel Retail",s:"20,000+"},
+    {c:"Booking.com",l:"Amsterdam, Netherlands",i:"Travel OTA",s:"10,000+"},
+    {c:"Priceline",l:"US",i:"Travel OTA",s:"10,000+"},
+    {c:"Sabre Corporation",l:"US",i:"Travel Tech GDS",s:"10,000+"},
+    {c:"Travelocity",l:"US",i:"Travel OTA",s:"10,000+"},
+    {c:"BCD Travel",l:"US",i:"Business Travel",s:"12,000+"},
+    {c:"Amex Global Business Travel",l:"New York, USA",i:"Business Travel",s:"10,000+"},
+    {c:"Travel Leaders Group",l:"Plymouth, USA",i:"Travel Agency",s:"10,000+"},
+    {c:"Traveloka",l:"Jakarta, Indonesia",i:"Travel OTA",s:"6,000+"},
+    {c:"Travelport",l:"US",i:"Travel Tech GDS",s:"6,000+"},
+    {c:"Agoda",l:"Singapore",i:"Travel OTA",s:"4,000+"},
+    {c:"Despegar",l:"Buenos Aires, Argentina",i:"Travel OTA",s:"3,500+"},
+    {c:"TripAdvisor",l:"US",i:"Travel Reviews",s:"3,000+"},
+    {c:"Hotels.com",l:"US",i:"Hotel OTA",s:"3,000+"},
+    {c:"Trip.com",l:"Shanghai, China",i:"Travel OTA",s:"30,000+"},
+    {c:"G Adventures",l:"Toronto, Canada",i:"Tour Operator",s:"2,500+"},
+    {c:"Intrepid Travel",l:"Melbourne, Australia",i:"Tour Operator",s:"2,500+"},
+    {c:"citizenM Hotels",l:"Amsterdam, Netherlands",i:"Hospitality",s:"2,000+"},
+    {c:"Invia Group",l:"Prague, Czech Republic",i:"Travel OTA",s:"2,000+"},
+    {c:"Make My Trip",l:"Gurgaon, India",i:"Travel OTA",s:"2,000+"},
+    {c:"Hopper",l:"Montreal, Canada",i:"Travel App",s:"2,000+"},
+    {c:"Klook",l:"Hong Kong, China",i:"Activities & Experiences",s:"1,000+"},
+    {c:"Kiwi.com",l:"Brno, Czech Republic",i:"Flight OTA",s:"1,500+"},
+    {c:"trivago",l:"Düsseldorf, Germany",i:"Hotel Metasearch",s:"1,000+"},
+    {c:"Egencia",l:"US",i:"Business Travel",s:"1,000+"},
+    {c:"Orbitz",l:"US",i:"Travel OTA",s:"1,000+"},
+    {c:"Thomas Cook",l:"Manchester, UK",i:"Tour Operator",s:"500-1000"},
+    {c:"Voyageurs du Monde",l:"Paris, France",i:"Tour Operator",s:"1,000+"},
+    {c:"Webjet",l:"Melbourne, Australia",i:"Travel OTA",s:"1,000+"},
+    {c:"Eurolines",l:"Paris, France",i:"Bus Travel",s:"1,000+"},
+    {c:"Travelzoo",l:"US",i:"Travel Deals",s:"500+"},
+    {c:"Holidu",l:"Munich, Germany",i:"Vacation Rentals",s:"400+"},
+    {c:"Omio",l:"Berlin, Germany",i:"Ground Transport",s:"300+"},
+    {c:"Tourlane",l:"Berlin, Germany",i:"Bespoke Travel",s:"300+"},
+    {c:"Tourradar",l:"Vienna, Austria",i:"Tour Marketplace",s:"500+"},
+    {c:"Musement",l:"Milan, Italy",i:"Experiences",s:"200+"},
+    {c:"Voyage Privé",l:"Aix-en-Provence, France",i:"Travel",s:"500–1,000"},
+    {c:"Quandoo",l:"Berlin, Germany",i:"Restaurant Booking",s:"500+"},
+    {c:"ALTOUR",l:"New York, USA",i:"Business Travel",s:"1,000+"},
+    {c:"FROSCH",l:"Houston, USA",i:"Luxury Travel",s:"1,000+"},
+    {c:"Direct Travel",l:"Denver, USA",i:"Business Travel",s:"1,000+"},
+    {c:"Dreamlines",l:"Hamburg, Germany",i:"Cruises",s:"500+"},
+    {c:"Cozmo Travel",l:"Sharjah, UAE",i:"Travel",s:"500–1,000"},
+    {c:"Rentcars.com",l:"Curitiba, Brazil",i:"Car Rental",s:"500–1,000"},
+    {c:"Almundo",l:"Buenos Aires, Argentina",i:"Travel OTA",s:"500+"},
+    {c:"veltra",l:"Tokyo, Japan",i:"Activities",s:"500+"},
+    {c:"Liberty Travel",l:"New Jersey, USA",i:"Travel Agency",s:"500-1000"},
+    {c:"Omega World Travel",l:"Fairfax, USA",i:"Business Travel",s:"500-1000"},
+  ]},
+  "Tech Giants":{icon:"🏔️",color:"#5F5E5A",bg:"#F2F1EF",companies:[
+    {c:"Amazon",l:"Seattle, USA",i:"E-commerce & Cloud",s:"1,500,000+"},
+    {c:"Samsung",l:"Seoul, South Korea",i:"Electronics",s:"270,000+"},
+    {c:"Microsoft",l:"Redmond, USA",i:"Software & Cloud",s:"220,000+"},
+    {c:"IBM",l:"Armonk, USA",i:"IT Services & Cloud",s:"250,000+"},
+    {c:"Alibaba",l:"Hangzhou, China",i:"E-commerce & Cloud",s:"240,000+"},
+    {c:"Google",l:"Mountain View, USA",i:"Internet Services & AI",s:"180,000+"},
+    {c:"Apple",l:"Cupertino, USA",i:"Consumer Electronics",s:"160,000+"},
+    {c:"Oracle",l:"Austin, USA",i:"Software & Cloud",s:"160,000+"},
+    {c:"ByteDance",l:"Beijing, China",i:"Internet & AI",s:"150,000+"},
+    {c:"Tesla",l:"Austin, USA",i:"Automotive & Energy",s:"140,000+"},
+    {c:"Tencent",l:"Shenzhen, China",i:"Internet Services & Gaming",s:"110,000+"},
+    {c:"Sony",l:"Tokyo, Japan",i:"Consumer Electronics & Gaming",s:"110,000+"},
+    {c:"SAP",l:"Walldorf, Germany",i:"Enterprise Software",s:"105,000+"},
+    {c:"Meta",l:"Menlo Park, USA",i:"Social Media & AI",s:"70,000+"},
+    {c:"Salesforce",l:"San Francisco, USA",i:"CRM & Cloud",s:"70,000+"},
+    {c:"Nordstrom",l:"US",i:"Retail",s:"70,000+"},
+    {c:"Intel",l:"Santa Clara, USA",i:"Semiconductors",s:"120,000+"},
+    {c:"NVIDIA",l:"Santa Clara, USA",i:"Semiconductors & AI",s:"36,000+"},
+    {c:"Adobe",l:"San Jose, USA",i:"Creative Software",s:"30,000+"},
+    {c:"Uber",l:"San Francisco, USA",i:"Ride-sharing & Mobility",s:"30,000+"},
+    {c:"Baidu",l:"Beijing, China",i:"Internet Services & AI",s:"40,000+"},
+    {c:"Netflix",l:"Los Gatos, USA",i:"Streaming",s:"13,000+"},
+    {c:"Airbnb",l:"San Francisco, USA",i:"Travel Marketplace",s:"14,000+"},
+    {c:"LinkedIn",l:"Sunnyvale, USA",i:"Professional Networking",s:"20,000+"},
+    {c:"Spotify",l:"Stockholm, Sweden",i:"Music Streaming",s:"9,000+"},
+    {c:"Twitter (X)",l:"San Francisco, USA",i:"Social Media",s:"7,000+"},
+  ]},
+};
+
+let cur=null,chartInst=null,chartMode="region",filterRegion="All",showModal=false;
+
+function dedup(arr){const s=new Set();return arr.filter(c=>{const k=c.c.toLowerCase();if(s.has(k))return false;s.add(k);return true;});}
+function sortBySize(arr){return [...arr].sort((a,b)=>parseSize(b.s)-parseSize(a.s));}
+function getFiltered(){
+  let list=sortBySize(dedup(TEAMS[cur].companies));
+  if(filterRegion!=="All")list=list.filter(c=>getRegion(c.l)===filterRegion);
+  return list;
+}
+
+function render(){
+  const app=document.getElementById("app");
+  app.innerHTML="";
+  if(showModal){renderModal();return;}
+  if(!cur)renderHome();else renderTeam();
+}
+
+function renderHome(){
+  document.getElementById("app").innerHTML=`
+    <div style="margin-bottom:22px">
+      <div style="font-size:22px;font-weight:500;color:var(--color-text-primary,#111);margin-bottom:5px">Talent Sourcing Hub</div>
+      <div style="font-size:13px;color:var(--color-text-secondary,#888)">Select a team to explore target companies</div>
+    </div>
+    <div class="grid-teams">
+      ${Object.keys(TEAMS).map(t=>`
+        <button class="team-btn" style="--tc:${TEAMS[t].color}" onclick="openTeam('${t.replace(/'/g,"\\'")}')">
+          <div style="display:flex;align-items:center;justify-content:space-between">
+            <span style="font-size:26px">${TEAMS[t].icon}</span>
+            <span style="font-size:12px;font-weight:500;color:${TEAMS[t].color};background:${TEAMS[t].bg};border-radius:12px;padding:3px 10px">${dedup(TEAMS[t].companies).length}</span>
+          </div>
+          <div style="font-size:14px;font-weight:500;color:var(--color-text-primary,#111)">${t}</div>
+        </button>
+      `).join("")}
+    </div>`;
+}
+
+function openTeam(name){cur=name;filterRegion="All";chartMode="region";render();setTimeout(drawChart,80);}
+function goHome(){cur=null;if(chartInst){chartInst.destroy();chartInst=null;}render();}
+
+function renderTeam(){
+  const t=TEAMS[cur];
+  const co=t.color;
+  const all=sortBySize(dedup(t.companies));
+  const filtered=getFiltered();
+  const regions=["All",...[...new Set(all.map(c=>getRegion(c.l)))].sort()];
+
+  document.getElementById("app").innerHTML=`
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:18px;flex-wrap:wrap">
+      <button class="back-btn" onclick="goHome()">← All teams</button>
+      <span style="font-size:19px">${t.icon}</span>
+      <span style="font-size:19px;font-weight:500;color:var(--color-text-primary,#111)">${cur}</span>
+      <span style="margin-left:auto;font-size:12px;font-weight:500;color:${co};background:${t.bg};border-radius:20px;padding:4px 14px">${all.length} companies</span>
+    </div>
+
+    <div class="chart-box">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px;flex-wrap:wrap">
+        <span style="font-size:11px;font-weight:500;color:var(--color-text-secondary,#aaa);text-transform:uppercase;letter-spacing:0.6px">Breakdown by</span>
+        <button class="pill-toggle active" id="pill-region" style="background:${co};border-color:${co}" onclick="setChartMode('region')">Region</button>
+        <button class="pill-toggle" id="pill-industry" onclick="setChartMode('industry')">Industry</button>
+      </div>
+      <div style="display:flex;gap:20px;align-items:center;flex-wrap:wrap">
+        <div class="donut-wrap"><canvas id="donutChart"></canvas>
+          <div class="donut-center">
+            <span style="font-size:22px;font-weight:500;color:var(--color-text-primary,#111)">${all.length}</span>
+            <span style="font-size:10px;color:var(--color-text-secondary,#aaa)">companies</span>
+          </div>
+        </div>
+        <div id="legend" style="display:flex;flex-direction:column;gap:6px;flex:1;min-width:130px"></div>
+      </div>
+    </div>
+
+    <div style="display:flex;gap:10px;align-items:center;margin-bottom:14px;flex-wrap:wrap">
+      <select onchange="doFilterRegion(this.value)" style="font-size:13px">
+        ${regions.map(r=>`<option value="${r}" ${r===filterRegion?"selected":""}>${r==="All"?"All regions":r}</option>`).join("")}
+      </select>
+      <button class="bool-btn" onclick="openModal()" style="color:${co};border-color:${co}">
+        <svg width="14" height="14" viewBox="0 0 16 16" fill="none" style="flex-shrink:0"><rect x="1" y="3" width="14" height="2" rx="1" fill="currentColor"/><rect x="1" y="7" width="10" height="2" rx="1" fill="currentColor"/><rect x="1" y="11" width="12" height="2" rx="1" fill="currentColor"/></svg>
+        Generate boolean
+      </button>
+    </div>
+
+    <div id="grid" class="grid-cards">${renderCards(filtered,co,t.bg)}</div>
+    <div style="margin-top:10px;font-size:11px;color:var(--color-text-tertiary,#bbb);text-align:right" id="count">Showing ${filtered.length} of ${all.length} · sorted by size</div>
+  `;
+  setTimeout(drawChart,80);
+}
+
+function renderCards(list,co,bg){
+  if(!list.length)return`<div style="grid-column:1/-1;text-align:center;padding:2rem;color:var(--color-text-secondary,#aaa)">No companies in this region.</div>`;
+  return list.map(c=>{
+    const p=pal(c.c);
+    const region=getRegion(c.l);
+    const logoUrl=LOGOS[c.c];
+    const avatarHtml=logoUrl
+      ?`<div class="avatar" style="background:#fff;border:0.5px solid var(--color-border-tertiary,#eee)"><img src="${logoUrl}" alt="${c.c}" onerror="this.parentNode.style.background='${p.bg}';this.parentNode.innerHTML='<span style=\\'color:${p.fg};font-size:13px;font-weight:500\\'>${ini(c.c)}</span>'" style="width:100%;height:100%;object-fit:contain;padding:4px"></div>`
+      :`<div class="avatar" style="background:${p.bg};color:${p.fg}">${ini(c.c)}</div>`;
+    return`<div class="card" style="--tc:${co}">
+      <div style="display:flex;align-items:center;gap:12px">
+        ${avatarHtml}
+        <div style="flex:1;min-width:0">
+          <div style="font-weight:500;font-size:14px;color:var(--color-text-primary,#111);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${c.c}</div>
+          <div style="font-size:12px;color:var(--color-text-secondary,#888);margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${c.i||"—"}</div>
+        </div>
+        <span style="font-size:10px;font-weight:500;color:${co};background:${bg};border-radius:5px;padding:2px 8px;white-space:nowrap;flex-shrink:0">${region}</span>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-top:10px">
+        <div style="background:var(--color-background-secondary,#f8f8f8);border-radius:7px;padding:7px 9px">
+          <div style="font-size:10px;color:var(--color-text-tertiary,#bbb);font-weight:500;text-transform:uppercase;letter-spacing:0.4px;margin-bottom:2px">Size</div>
+          <div style="font-size:12px;color:var(--color-text-primary,#333);font-weight:500">${c.s||"—"}</div>
+        </div>
+        <div style="background:var(--color-background-secondary,#f8f8f8);border-radius:7px;padding:7px 9px">
+          <div style="font-size:10px;color:var(--color-text-tertiary,#bbb);font-weight:500;text-transform:uppercase;letter-spacing:0.4px;margin-bottom:2px">Location</div>
+          <div style="font-size:12px;color:var(--color-text-primary,#333);font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${c.l||"—"}</div>
+        </div>
+      </div>
+      <div style="margin-top:10px;padding-top:10px;border-top:0.5px solid var(--color-border-tertiary,#f0f0f0)">
+        <a href="https://www.linkedin.com/search/results/people/?currentCompany=${encodeURIComponent(c.c)}" target="_blank" style="font-size:12px;color:${co};text-decoration:none;font-weight:500">Search on LinkedIn →</a>
+      </div>
+    </div>`;
+  }).join("");
+}
+
+function generateBoolean(){
+  const t=TEAMS[cur];
+  const all=sortBySize(dedup(t.companies));
+  const isAllRegions=filterRegion==="All";
+  const companies=isAllRegions?all:all.filter(c=>getRegion(c.l)===filterRegion);
+  const companyNames=companies.map(c=>`"${c.c}"`).join(" OR ");
+  let locationClause="";
+  if(!isAllRegions){
+    const regionKeywords={
+      "Americas":["United States","USA","Canada","Brazil","Argentina","Mexico","Colombia","Uruguay","Chile","Peru"],
+      "Europe":["Germany","France","United Kingdom","Netherlands","Sweden","Switzerland","Spain","Italy","Poland","Belgium","Austria","Ireland","Denmark","Portugal","Romania","Turkey","Estonia","Lithuania","Czech Republic","Finland","Norway","Cyprus","Belarus","Ukraine"],
+      "Asia-Pacific":["China","Japan","Singapore","India","Australia","Indonesia","South Korea","Malaysia","Thailand","Vietnam"],
+      "Middle East":["UAE","Dubai","Israel","Saudi Arabia"],
+    };
+    const kws=regionKeywords[filterRegion]||[filterRegion];
+    locationClause=` AND (${kws.map(k=>`"${k}"`).join(" OR ")})`;
+  }
+  return`(${companyNames})${locationClause}`;
+}
+
+function openModal(){showModal=true;render();}
+function closeModal(){showModal=false;render();setTimeout(drawChart,80);}
+
+function renderModal(){
+  const t=TEAMS[cur];
+  const co=t.color;
+  const bool=generateBoolean();
+  const label=filterRegion==="All"?"all regions":filterRegion;
+  const all=sortBySize(dedup(t.companies));
+  const count=filterRegion==="All"?all.length:all.filter(c=>getRegion(c.l)===filterRegion).length;
+
+  document.getElementById("app").innerHTML=`
+    <div class="modal-backdrop" style="min-height:520px">
+      <div class="modal-box">
+        <div style="display:flex;align-items:flex-start;justify-content:space-between;margin-bottom:16px;gap:12px">
+          <div>
+            <div style="font-size:16px;font-weight:500;color:var(--color-text-primary,#111);margin-bottom:4px">Boolean search string</div>
+            <div style="font-size:12px;color:var(--color-text-secondary,#888)">${cur} · ${label} · ${count} companies</div>
+          </div>
+          <button onclick="closeModal()" style="background:transparent;border:0.5px solid var(--color-border-tertiary,#ddd);border-radius:8px;padding:6px 12px;font-size:13px;color:var(--color-text-secondary,#666);cursor:pointer;flex-shrink:0">Close</button>
+        </div>
+        <div style="font-size:12px;color:var(--color-text-secondary,#888);margin-bottom:8px">Paste directly into LinkedIn Recruiter, Boolean search engines, or ATS sourcing fields.</div>
+        <div class="bool-text" id="boolText">${bool}</div>
+        <div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap">
+          <button class="copy-btn" id="copyBtn" onclick="copyBool()">Copy to clipboard</button>
+          <div style="font-size:11px;color:var(--color-text-secondary,#888);display:flex;align-items:center;gap:4px">
+            <span style="background:var(--color-background-secondary,#f5f5f5);border-radius:4px;padding:2px 6px;font-family:monospace;font-size:11px">Ctrl+A</span> then
+            <span style="background:var(--color-background-secondary,#f5f5f5);border-radius:4px;padding:2px 6px;font-family:monospace;font-size:11px">Ctrl+C</span> to select all
+          </div>
+        </div>
+        <div style="margin-top:16px;padding-top:16px;border-top:0.5px solid var(--color-border-tertiary,#eee)">
+          <div style="font-size:11px;color:var(--color-text-secondary,#888);font-weight:500;margin-bottom:6px;text-transform:uppercase;letter-spacing:0.4px">Tips</div>
+          <div style="font-size:12px;color:var(--color-text-secondary,#888);line-height:1.7">
+            Use in <strong>LinkedIn Recruiter</strong> "Current company" + "Location" fields for best results.<br>
+            Combine with role titles like <em>AND ("Product Manager" OR "Senior PM")</em> to narrow results.<br>
+            Works in <strong>GitHub</strong>, <strong>X-Ray search</strong>, and <strong>Google</strong> sourcing queries.
+          </div>
+        </div>
+      </div>
+    </div>`;
+}
+
+function copyBool(){
+  const text=generateBoolean();
+  navigator.clipboard.writeText(text).then(()=>{
+    const btn=document.getElementById("copyBtn");
+    if(btn){btn.textContent="Copied!";setTimeout(()=>{if(btn)btn.textContent="Copy to clipboard";},2000);}
+  }).catch(()=>{
+    const el=document.getElementById("boolText");
+    if(el){const r=document.createRange();r.selectNode(el);window.getSelection().removeAllRanges();window.getSelection().addRange(r);}
+  });
+}
+
+function setChartMode(mode){
+  chartMode=mode;
+  const co=TEAMS[cur].color;
+  ["region","industry"].forEach(m=>{
+    const b=document.getElementById("pill-"+m);
+    if(!b)return;
+    if(m===mode){b.classList.add("active");b.style.background=co;b.style.borderColor=co;b.style.color="#fff";}
+    else{b.classList.remove("active");b.style.background="transparent";b.style.borderColor="var(--color-border-secondary,#ccc)";b.style.color="var(--color-text-secondary,#666)";}
+  });
+  drawChart();
+}
+
+function doFilterRegion(v){filterRegion=v;redrawList();}
+
+function redrawList(){
+  const t=TEAMS[cur];
+  const all=sortBySize(dedup(t.companies));
+  const filtered=getFiltered();
+  const g=document.getElementById("grid");
+  if(g)g.innerHTML=renderCards(filtered,t.color,t.bg);
+  const ct=document.getElementById("count");
+  if(ct)ct.textContent=`Showing ${filtered.length} of ${all.length} · sorted by size`;
+}
+
+function drawChart(){
+  const canvas=document.getElementById("donutChart");
+  const legend=document.getElementById("legend");
+  if(!canvas||!legend)return;
+  const all=sortBySize(dedup(TEAMS[cur].companies));
+  const counts={};
+  all.forEach(c=>{
+    const key=chartMode==="region"?getRegion(c.l):(c.i||"Unknown");
+    counts[key]=(counts[key]||0)+1;
+  });
+  let data=Object.entries(counts).sort((a,b)=>b[1]-a[1]);
+  if(chartMode==="industry"&&data.length>8){
+    const other=data.slice(7).reduce((s,[,v])=>s+v,0);
+    data=[...data.slice(0,7),["Other",other]];
+  }
+  const labels=data.map(([k])=>k);
+  const vals=data.map(([,v])=>v);
+  const total=vals.reduce((s,v)=>s+v,0);
+  const bgC=CHART_COLORS.slice(0,labels.length);
+  if(chartInst)chartInst.destroy();
+  chartInst=new Chart(canvas,{
+    type:"doughnut",
+    data:{labels,datasets:[{data:vals,backgroundColor:bgC,borderWidth:0,hoverOffset:4}]},
+    options:{responsive:true,maintainAspectRatio:false,cutout:"68%",plugins:{legend:{display:false},tooltip:{callbacks:{label:ctx=>` ${ctx.label}: ${ctx.raw} (${Math.round(ctx.raw/total*100)}%)`}}}}
+  });
+  legend.innerHTML=labels.map((l,i)=>`
+    <div class="legend-row ${chartMode==='region'?'clickable':''}" onclick="${chartMode==='region'?`doFilterRegion('${l}')`:``}">
+      <span class="legend-dot" style="background:${bgC[i]}"></span>
+      <span style="flex:1;color:var(--color-text-secondary,#555);font-size:12px">${l}</span>
+      <span style="font-weight:500;color:var(--color-text-primary,#111);font-size:12px">${vals[i]}</span>
+      <span style="color:var(--color-text-tertiary,#bbb);min-width:30px;text-align:right;font-size:11px">${Math.round(vals[i]/total*100)}%</span>
+    </div>`).join("");
+}
+
+render();
+</script>
